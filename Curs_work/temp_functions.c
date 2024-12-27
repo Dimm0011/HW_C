@@ -1,112 +1,116 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
 #include "temp_functions.h"
 
-// Функция вывода справки
-void print_help() {
-    printf("Usage: \n");
-    printf("-h          Show help\n");
-    printf("-f <filename.csv>  Specify the input CSV file\n");
-    printf("-m <month>   Show statistics for the specified month\n");
-}
+// Функция для загрузки данных из CSV
 
-// Чтение CSV файла и сохранение данных в массив
-int parse_csv_file(const char* filename, TemperatureData* data, int max_records) {
+// Функция для загрузки данных из CSV файла
+int load_data_from_csv(const char *filename, TemperatureRecord **records, int *record_count) {
     FILE *file = fopen(filename, "r");
-    if (!file) {
-        perror("Error opening file");
-        return -1;
+    if (file == NULL) {
+        fprintf(stderr, "Ошибка: Не удалось открыть файл %s\n", filename);
+        return 1;
     }
 
-    char line[100];
-    int record_count = 0;
+    // Начальные значения
+    int capacity = 10;
+    *records = malloc(capacity * sizeof(TemperatureRecord));
+    if (*records == NULL) {
+        fprintf(stderr, "Ошибка: Не удалось выделить память для записей\n");
+        fclose(file);
+        return 1;
+    }
 
+    *record_count = 0;
+
+    // Пропускаем заголовок CSV
+    char line[256];
+    fgets(line, sizeof(line), file); // Читаем строку с заголовками (если есть)
+
+    // Чтение данных
     while (fgets(line, sizeof(line), file)) {
-        if (parse_line(line, &data[record_count]) == 0) {
-            record_count++;
-            if (record_count >= max_records) {
-                break;
+        // Проверка на переполнение массива
+        if (*record_count >= capacity) {
+            capacity *= 2;  // Увеличиваем размер массива
+            *records = realloc(*records, capacity * sizeof(TemperatureRecord));
+            if (*records == NULL) {
+                fprintf(stderr, "Ошибка: Не удалось перераспределить память\n");
+                fclose(file);
+                return 1;
             }
         }
+
+        TemperatureRecord record;
+        // Считываем данные из строки CSV
+        int result = sscanf(line, "%d;%d;%d;%d;%d;%d", &record.year, &record.month, &record.day,
+                             &record.hour, &record.minute, &record.temperature);
+
+        // Проверка на успешное считывание всех данных
+        if (result != 6) {
+            fprintf(stderr, "Ошибка: Неверный формат данных в строке: %s", line);
+            continue;  // Пропускаем некорректные строки
+        }
+
+        // Добавляем корректную запись в массив
+        (*records)[*record_count] = record;
+        (*record_count)++;
     }
 
     fclose(file);
-    return record_count;
+    return 0;  // Успешно
 }
-
-// Парсинг строки CSV в структуру
-int parse_line(char* line, TemperatureData* entry) {
-    int year, month, day, hour, minute, temperature;
-    if (sscanf(line, "%d %d %d %d %d %d", &year, &month, &day, &hour, &minute, &temperature) != 6) {
-        return -1;  // Ошибка в формате
-    }
-
-    entry->year = year;
-    entry->month = month;
-    entry->day = day;
-    entry->hour = hour;
-    entry->minute = minute;
-    entry->temperature = temperature;
-
-    return 0;
-}
-
-// Расчет статистики для месяца
-void calculate_monthly_statistics(TemperatureData* data, int record_count, int month) {
-    int min_temp = INT_MAX;
-    int max_temp = INT_MIN;
-    int total_temp = 0;
+// Функция для вывода статистики по месяцу
+void print_month_statistics(TemperatureRecord* records, int record_count, int month) {
+    int sum = 0, min_temp = 999, max_temp = -999;
     int count = 0;
 
     for (int i = 0; i < record_count; i++) {
-        if (data[i].month == month) {
-            total_temp += data[i].temperature;
-            if (data[i].temperature < min_temp) {
-                min_temp = data[i].temperature;
-            }
-            if (data[i].temperature > max_temp) {
-                max_temp = data[i].temperature;
-            }
+        if (records[i].month == month) {
+            sum += records[i].temperature;
+            if (records[i].temperature < min_temp) min_temp = records[i].temperature;
+            if (records[i].temperature > max_temp) max_temp = records[i].temperature;
             count++;
         }
     }
 
     if (count > 0) {
-        printf("Monthly statistics for month %d:\n", month);
-        printf("Average temperature: %.2f\n", (double)total_temp / count);
-        printf("Minimum temperature: %d\n", min_temp);
-        printf("Maximum temperature: %d\n", max_temp);
+        printf("Статистика за месяц %d:\n", month);
+        printf("Средняя температура: %.2f\n", (float)sum / count);
+        printf("Минимальная температура: %d\n", min_temp);
+        printf("Максимальная температура: %d\n", max_temp);
     } else {
-        printf("No data for month %d\n", month);
+        printf("Данных за месяц %d нет.\n", month);
     }
 }
 
-// Расчет статистики за год
-void calculate_annual_statistics(TemperatureData* data, int record_count) {
-    int min_temp = INT_MAX;
-    int max_temp = INT_MIN;
-    int total_temp = 0;
+// Функция для вывода статистики за год
+void print_year_statistics(TemperatureRecord* records, int record_count) {
+    int sum = 0, min_temp = 999, max_temp = -999;
     int count = 0;
 
     for (int i = 0; i < record_count; i++) {
-        total_temp += data[i].temperature;
-        if (data[i].temperature < min_temp) {
-            min_temp = data[i].temperature;
-        }
-        if (data[i].temperature > max_temp) {
-            max_temp = data[i].temperature;
-        }
+        sum += records[i].temperature;
+        if (records[i].temperature < min_temp) min_temp = records[i].temperature;
+        if (records[i].temperature > max_temp) max_temp = records[i].temperature;
         count++;
     }
 
     if (count > 0) {
-        printf("Annual statistics:\n");
-        printf("Average temperature: %.2f\n", (double)total_temp / count);
-        printf("Minimum temperature: %d\n", min_temp);
-        printf("Maximum temperature: %d\n", max_temp);
+        printf("Годовая статистика:\n");
+        printf("Средняя температура: %.2f\n", (float)sum / count);
+        printf("Минимальная температура: %d\n", min_temp);
+        printf("Максимальная температура: %d\n", max_temp);
     } else {
-        printf("No data available for the year\n");
+        printf("Данных нет.\n");
+    }
+}
+
+// Функция для вывода общей статистики (по месяцу или году)
+void print_statistics(TemperatureRecord* records, int record_count, int month) {
+    if (month == 0) {
+        print_year_statistics(records, record_count);  // Если месяц не указан, выводим статистику за год
+    } else {
+        print_month_statistics(records, record_count, month);  // Иначе выводим статистику по месяцу
     }
 }

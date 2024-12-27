@@ -1,6 +1,7 @@
 #ifndef TEMP_FUNCTIONS_H
 #define TEMP_FUNCTIONS_H
 
+// Структура для записи о температуре
 typedef struct {
     int year;
     int month;
@@ -8,13 +9,12 @@ typedef struct {
     int hour;
     int minute;
     int temperature;
-} TemperatureData;
+} TemperatureRecord;
 
 // Прототипы функций
-void print_help();
-int parse_csv_file(const char* filename, TemperatureData* data, int max_records);
-void calculate_monthly_statistics(TemperatureData* data, int record_count, int month);
-void calculate_annual_statistics(TemperatureData* data, int record_count);
-int parse_line(char* line, TemperatureData* entry);
+int load_data_from_csv(const char* filename, TemperatureRecord** records, int* record_count);
+void print_statistics(TemperatureRecord* records, int record_count, int month);
+void print_month_statistics(TemperatureRecord* records, int record_count, int month);
+void print_year_statistics(TemperatureRecord* records, int record_count);
 
 #endif // TEMP_FUNCTIONS_H
